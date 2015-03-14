@@ -21,14 +21,17 @@ namespace OAuth2
     /// <summary>
     /// Authorization, refresh, and validation of users through OAuth2.
     /// </summary>
-    public class OAuth2
+    public class OAuth2Client
     {
         /// <summary>
         /// JSON Serializer for deserializing the responses.
         /// </summary>
         protected static readonly JsonSerializer jsonSerializer = new JsonSerializer();
 
-        private readonly OAuth2ClientInfo clientInfo;
+        /// <summary>
+        /// The client credentials issued by the OAuth provider.
+        /// </summary>
+        private readonly OAuth2ClientCredentials clientCredentials;
 
         /// <summary>
         /// Name of provider.
@@ -90,13 +93,13 @@ namespace OAuth2
         /// <summary>
         /// Initiate a new instance of the OAuth2 library.
         /// </summary>
-        /// <param name="clientInfo">Client Info issued by the provider.</param>
+        /// <param name="clientCredentials">Client Credentials issued by the provider.</param>
         /// <param name="endpoint">The provider information.</param>
         /// <param name="redirectURL">URL for provider to redirect back to when auth is completed.</param>
         /// <param name="accessToken">(optional) Access token to refresh.</param>
-        public OAuth2(OAuth2ClientInfo clientInfo, OAuth2Endpoint endpoint, string redirectURL = null, string accessToken = null)
+        public OAuth2Client(OAuth2ClientCredentials clientCredentials, OAuth2Endpoint endpoint, string redirectURL = null, string accessToken = null)
         {
-            this.clientInfo = clientInfo;
+            this.clientCredentials = clientCredentials;
             this.endpoint = endpoint;
             this.redirectURL = redirectURL;
             this.AccessToken = accessToken;
@@ -114,8 +117,8 @@ namespace OAuth2
             {
                 parameters = new List<Tuple<string, string>> {
                 new Tuple<string, string>("access_token", this.AccessToken),
-                new Tuple<string, string>("client_id", this.clientInfo.Id),
-                new Tuple<string, string>("client_secret", this.clientInfo.Secret),
+                new Tuple<string, string>("client_id", this.clientCredentials.Id),
+                new Tuple<string, string>("client_secret", this.clientCredentials.Secret),
                 new Tuple<string, string>("redirect_uri", this.redirectURL)
             };
 
@@ -144,7 +147,7 @@ namespace OAuth2
             }
 
             parameters = new List<Tuple<string, string>> {
-            new Tuple<string, string>("client_id", clientInfo.Id),
+            new Tuple<string, string>("client_id", clientCredentials.Id),
             new Tuple<string, string>("display", "page"),
             new Tuple<string, string>("locale", "en"),
             new Tuple<string, string>("redirect_uri", this.redirectURL),
@@ -192,9 +195,9 @@ namespace OAuth2
         private void handleCodeResponse(string code)
         {
             var parameters = new List<Tuple<string, string>> {
-                new Tuple<string, string>("client_id", this.clientInfo.Id),
+                new Tuple<string, string>("client_id", this.clientCredentials.Id),
                 new Tuple<string, string>("redirect_uri", this.redirectURL),
-                new Tuple<string, string>("client_secret", this.clientInfo.Secret),
+                new Tuple<string, string>("client_secret", this.clientCredentials.Secret),
                 new Tuple<string, string>("code", code)
             };
 

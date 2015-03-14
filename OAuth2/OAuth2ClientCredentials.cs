@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 namespace OAuth2
 {
     /// <summary>
-    /// Represents the client information issued by the OAuth provider.
+    /// Represents the client credentials issued by the OAuth provider.
     /// </summary>
-    public class OAuth2ClientInfo
+    public class OAuth2ClientCredentials
     {
         /// <summary>
         /// Gets the Client Secret issued by the provider.
@@ -22,11 +22,11 @@ namespace OAuth2
         public string Id { get; private set; }
 
         /// <summary>
-        /// Creates a new instance of the <see cref="OAuth2ClientInfo"/> class with the given details.
+        /// Creates a new instance of the <see cref="OAuth2ClientCredentials"/> class with the given details.
         /// </summary>
         /// <param name="is">The Client Id issued by the provider.</param>
         /// <param name="secret">The Client Secret issued by the provider.</param>
-        public OAuth2ClientInfo(string id, string secret)
+        public OAuth2ClientCredentials(string id, string secret)
         {
             if (string.IsNullOrWhiteSpace(id))
                 throw new ArgumentException("ClientID is required!", "id");
