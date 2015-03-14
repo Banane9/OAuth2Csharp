@@ -39,6 +39,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="OAuth2.cs" />
+    <Compile Include="OAuth2ClientInfo.cs" />
     <Compile Include="OAuth2Endpoint.cs" />
     <Compile Include="OAuth2Endpoints.cs" />
     <Compile Include="OAuth2UserInfo.cs" />

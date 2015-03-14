@@ -24,39 +24,21 @@ namespace OAuth2
     public class OAuth2
     {
         /// <summary>
-        /// The current request object to use throughout the library.
-        /// </summary>
-        private readonly HttpRequest request = HttpContext.Current.Request;
-
-        /// <summary>
         /// JSON Serializer for deserializing the responses.
         /// </summary>
         protected static readonly JsonSerializer jsonSerializer = new JsonSerializer();
 
-        /// <summary>
-        /// The current response object to use throughout the library.
-        /// </summary>
-        private readonly HttpResponse response = HttpContext.Current.Response;
-
-        /// <summary>
-        /// ClientID given by provider.
-        /// </summary>
-        private string clientID { get; set; }
-
-        /// <summary>
-        /// ClientSecret issued by provider.
-        /// </summary>
-        private string clientSecret { get; set; }
+        private readonly OAuth2ClientInfo clientInfo;
 
         /// <summary>
         /// Name of provider.
         /// </summary>
-        private string provider { get; set; }
+        private OAuth2Endpoint endpoint { get; private set; }
 
         /// <summary>
         /// URL for provider to redirect back to when auth is completed.
         /// </summary>
-        private string redirectURL { get; set; }
+        private string redirectURL { get; private set; }
 
         /// <summary>
         /// Access token issued by provider.
@@ -71,7 +53,7 @@ namespace OAuth2
         /// <summary>
         /// The type of token issued by the provider.
         /// </summary>
-        public string TokenType { get; set; }
+        public string TokenType { get; private set; }
 
         /// <summary>
         /// Reflects whether or not the user has been authorized.
@@ -91,71 +73,33 @@ namespace OAuth2
         /// <summary>
         /// General error message from provider.
         /// </summary>
-        public string Error { get; set; }
+        public string Error { get; private set; }
 
         /// <summary>
         /// Reason for error, from provider.
         /// </summary>
-        public string ErrorReason { get; set; }
+        public string ErrorReason { get; private set; }
 
         /// <summary>
         /// Description of error, from provider.
         /// </summary>
-        public string ErrorDescription { get; set; }
+        public string ErrorDescription { get; private set; }
+
+        private readonly Action<string> redirect;
 
         /// <summary>
         /// Initiate a new instance of the OAuth2 library.
         /// </summary>
-        /// <param name="clientID">ClientID given by provider.</param>
-        /// <param name="clientSecret">ClientSecret issued by provider.</param>
-        /// <param name="provider">Name of provider.</param>
+        /// <param name="clientInfo">Client Info issued by the provider.</param>
+        /// <param name="endpoint">The provider information.</param>
         /// <param name="redirectURL">URL for provider to redirect back to when auth is completed.</param>
         /// <param name="accessToken">(optional) Access token to refresh.</param>
-        public OAuth2(string clientID, string clientSecret, string provider, string redirectURL = null, string accessToken = null)
+        public OAuth2(OAuth2ClientInfo clientInfo, OAuth2Endpoint endpoint, string redirectURL = null, string accessToken = null)
         {
-            if (string.IsNullOrWhiteSpace(clientID) ||
-                string.IsNullOrWhiteSpace(clientSecret))
-                throw new ArgumentException("Both clientID and clientSecret are required!");
-
-            var endpoint =
-                this.endpoints.SingleOrDefault(ep => ep.Provider.Equals(provider, StringComparison.CurrentCultureIgnoreCase));
-
-            if (endpoint == null)
-                throw new Exception("Missing endpoint for given provider: " + provider);
-
-            if (string.IsNullOrWhiteSpace(redirectURL))
-                redirectURL =
-                    this.request.Url.Scheme +
-                    "://" +
-                    this.request.Url.Authority +
-                    "/login/" + provider + "/auth";
-
-            this.clientID = clientID;
-            this.clientSecret = clientSecret;
-            this.provider = provider;
+            this.clientInfo = clientInfo;
+            this.endpoint = endpoint;
             this.redirectURL = redirectURL;
-
             this.AccessToken = accessToken;
-        }
-
-        /// <summary>
-        /// Add an endpoint.
-        /// </summary>
-        /// <param name="provider">Name of the provider.</param>
-        /// <param name="authURL">URL for user-redirection to provider auth-page.</param>
-        /// <param name="accessTokenURL">URL for access token validation.</param>
-        /// <param name="refreshTokenURL">URL for access token refresh.</param>
-        /// <param name="userInfoURL">URL for user infomation gathering.</param>
-        /// <param name="scope">Provider-scope, if any.</param>
-        public void AddEndpoint(string provider, string authURL, string accessTokenURL, string refreshTokenURL, string userInfoURL, string scope = null)
-        {
-            this.endpoints.Add(
-                new OAuth2Endpoint
-                {
-                    Provider = provider,
-                    AuthURL = authURL,
-                    Scope = scope
-                });
         }
 
         /// <summary>
@@ -166,15 +110,12 @@ namespace OAuth2
             List<Tuple<string, string>> parameters;
             string url;
 
-            var endpoint =
-                this.endpoints.Single(ep => ep.Provider.Equals(provider, StringComparison.CurrentCultureIgnoreCase));
-
             if (!string.IsNullOrWhiteSpace(this.AccessToken))
             {
                 parameters = new List<Tuple<string, string>> {
                 new Tuple<string, string>("access_token", this.AccessToken),
-                new Tuple<string, string>("client_id", this.clientID),
-                new Tuple<string, string>("client_secret", this.clientSecret),
+                new Tuple<string, string>("client_id", this.clientInfo.Id),
+                new Tuple<string, string>("client_secret", this.clientInfo.Secret),
                 new Tuple<string, string>("redirect_uri", this.redirectURL)
             };
 
@@ -187,7 +128,7 @@ namespace OAuth2
 
                 try
                 {
-                    code = jsonSerializer.Deserialize<OAuth2CodeResponse>(resp).Code;
+                    code = jsonSerializer.Deserialize<OAuth2CodeResponse>(resp.Result.ToJsonReader()).Code;
                 }
                 catch (Exception ex)
                 {
@@ -203,7 +144,7 @@ namespace OAuth2
             }
 
             parameters = new List<Tuple<string, string>> {
-            new Tuple<string, string>("client_id", this.clientID),
+            new Tuple<string, string>("client_id", clientInfo.Id),
             new Tuple<string, string>("display", "page"),
             new Tuple<string, string>("locale", "en"),
             new Tuple<string, string>("redirect_uri", this.redirectURL),
@@ -218,7 +159,7 @@ namespace OAuth2
                 endpoint.AuthURL + "?" +
                 this.buildQueryString(parameters);
 
-            this.response.Redirect(url, true);
+            redirect(url);
         }
 
         /// <summary>
@@ -251,14 +192,11 @@ namespace OAuth2
         private void handleCodeResponse(string code)
         {
             var parameters = new List<Tuple<string, string>> {
-                new Tuple<string, string>("client_id", this.clientID),
+                new Tuple<string, string>("client_id", this.clientInfo.Id),
                 new Tuple<string, string>("redirect_uri", this.redirectURL),
-                new Tuple<string, string>("client_secret", this.clientSecret),
+                new Tuple<string, string>("client_secret", this.clientInfo.Secret),
                 new Tuple<string, string>("code", code)
             };
-
-            var endpoint =
-                this.endpoints.Single(ep => ep.Provider.Equals(provider, StringComparison.CurrentCultureIgnoreCase));
 
             var url =
                 endpoint.AccessTokenURL + "?" +
@@ -366,7 +304,7 @@ namespace OAuth2
 
             try
             {
-                this.UserInfo = new JavaScriptSerializer().Deserialize<OAuth2UserInfo>(resp);
+                this.UserInfo = jsonSerializer.Deserialize<OAuth2UserInfo>(resp.ToJsonReader());
             }
             catch (Exception ex)
             {
@@ -378,13 +316,11 @@ namespace OAuth2
         /// <summary>
         /// Compiles a list of parameters into a working query-string.
         /// </summary>
-        /// <param name="parameteres">Parameters to compile.</param>
+        /// <param name="parameters">Parametrs to compile.</param>
         /// <returns>Compilled query-string.</returns>
-        private string buildQueryString(IEnumerable<Tuple<string, string>> parameteres)
+        private string buildQueryString(IEnumerable<Tuple<string, string>> parameters)
         {
-            return
-                parameteres.Aggregate("", (current, parameter) => current + ("&" + parameter.Item1 + "=" + HttpUtility.UrlEncode(parameter.Item2)))
-                    .Substring(1);
+            return string.Join("&", parameters.Where(param => !string.IsNullOrWhiteSpace(param.Item2)).Select(param => param.Item1 + "=" + param.Item2));
         }
 
         /// <summary>
